@@ -1,0 +1,11 @@
+# Ignore output documents folder
+output_docs/
+
+# Ignore questionnaire documents folder
+questionairre_docs/
+
+# Ignore virtual environment files
+myenv/
+*.pyc
+__pycache__/
+.env
