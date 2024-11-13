@@ -10,7 +10,7 @@ from flask_cors import CORS  # Add this import
 app = Flask(__name__)
 CORS(app)
 
-client = AIHub(api_root="https://aihub.instabase.com/api", api_key="UJKZt7D3cR03ZCGnHYp0Bv4Vu58qSx", ib_context="ib-internal")
+client = AIHub(api_root="https://aihub.instabase.com/api", api_key="", ib_context="")
 
 def parse_questionnaire(doc_path):
     # Create a conversation and upload the document
