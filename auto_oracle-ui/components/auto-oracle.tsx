@@ -15,8 +15,7 @@ import Image from 'next/image'
 //   await new Promise(resolve => setTimeout(resolve, 2000))
 //   return [
 //     'Is the system SOC2 compliant?',
-//     'Can users delete their data?',
-//     'What security measures are in place?'
+//     'Can users delete their data?'
 //   ]
 // }
 
@@ -121,6 +120,7 @@ export function AutoOracle() {
   const [followUpQuestion, setFollowUpQuestion] = useState('');
   const [isLoadingAnswer, setIsLoadingAnswer] = useState(false);
   const [pendingQA, setPendingQA] = useState<{ question: string; answer: string } | null>(null);
+  const [isGeneratingDoc, setIsGeneratingDoc] = useState(false);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.[0]) {
@@ -234,6 +234,64 @@ export function AutoOracle() {
     }
   };
 
+  const handleGenerateDoc = async () => {
+    if (!file) return;
+    
+    try {
+      setIsGeneratingDoc(true);
+      const response = await fetch('http://localhost:5001/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          documentName: file.name,
+          qaArray: questions.map(question => ({
+            question,
+            answer: answers[question]
+          }))
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate document');
+      }
+      
+      // Get the blob from the response
+      const blob = await response.blob();
+      
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'generated-document.docx';
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      a.remove();
+      
+    } catch (error) {
+      console.error('Error generating document:', error);
+    } finally {
+      setIsGeneratingDoc(false);
+    }
+  };
+
+  // const HARDCODED_DOC_URL = "https://docs.google.com/document/d/1VGtDrDYVpAmLwEG1vJvwOmHKCWaOBrFxOXZtQkxBj4Y/edit"; // Replace with your Google Doc URL
+  const DROPBOX_URL = "https://www.dropbox.com/scl/fi/pdtiskoj2efhjzwv585eo/Sample-RFP.docx?rlkey=s9wu2cy6dbn2ucu3lri7ka73r&e=1&st=0gyoqc8i&dl=0"; // Replace with your Dropbox link
+
+  // Helper function to convert Dropbox link to preview link
+  const getDropboxPreviewUrl = (url: string) => {
+    // Convert dropbox share link to direct download link
+    return url.replace('www.dropbox.com', 'dl.dropboxusercontent.com').replace('?dl=0', '');
+  };
+
+  // At the top of your component, add this helper function
+  const getGoogleDocsViewerUrl = (fileUrl: string) => {
+    // return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(fileUrl)}`;
+    return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(fileUrl)}`;
+  };
+
   if (step === 'upload') {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
@@ -271,7 +329,7 @@ export function AutoOracle() {
                       <Input
                         type="file"
                         onChange={handleFileChange}
-                        accept=".pdf,.doc,.docx"
+                        accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                         className="w-full file:mr-4 file:py-2 file:px-4 
                                   file:rounded-full file:border-0 
                                   file:text-sm file:font-semibold 
@@ -281,6 +339,9 @@ export function AutoOracle() {
                     </div>
                     <Upload className="h-5 w-5 text-muted-foreground shrink-0" />
                   </div>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Supported formats: PDF (.pdf), Word Document (.doc, .docx)
+                  </p>
                 </div>
 
                 <div className="space-y-4">
@@ -385,10 +446,20 @@ export function AutoOracle() {
               />
               <h1 className="text-2xl font-bold">Auto Oracle</h1>
             </div>
-            <Button onClick={exportAnswers} variant="outline">
-              <Download className="h-4 w-4 mr-2" />
-              Export Answers
-            </Button>
+            <div className="flex items-center gap-4">
+              <Button onClick={exportAnswers} variant="outline">
+                <Download className="h-4 w-4 mr-2" />
+                Export Answers
+              </Button>
+              <Button 
+                onClick={handleGenerateDoc} 
+                variant="outline"
+                disabled={isGeneratingDoc}
+              >
+                <FileText className="h-4 w-4 mr-2" />
+                {isGeneratingDoc ? 'Generating...' : 'Generate DOCX'}
+              </Button>
+            </div>
           </div>
 
           {/* Main Content */}
@@ -409,18 +480,24 @@ export function AutoOracle() {
                     >
                       <p>Unable to display PDF. <a href={fileUrl} target="_blank" rel="noopener noreferrer">Download instead</a></p>
                     </object>
-                  ) : (
-                    <div className="h-[600px] bg-muted rounded-lg flex items-center justify-center flex-col p-4">
-                      <FileText className="h-12 w-12 text-muted-foreground mb-2" />
-                      <p className="text-center text-sm text-muted-foreground">
-                        Preview not available for {file.type} files.
-                        <br />
-                        <a href={fileUrl} download className="text-primary hover:underline">
-                          Download file
-                        </a>
-                      </p>
-                    </div>
-                  )
+                  ) : file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || 
+                       file.type === 'application/msword' ? (
+                        <iframe
+                          src={getGoogleDocsViewerUrl(getDropboxPreviewUrl(DROPBOX_URL))}
+                          className="w-full h-[800px] rounded-lg border-0"
+                        />
+                      ) : (
+                        <div className="h-[600px] bg-muted rounded-lg flex items-center justify-center flex-col p-4">
+                          <FileText className="h-12 w-12 text-muted-foreground mb-2" />
+                          <p className="text-center text-sm text-muted-foreground">
+                            Preview not available for {file.type} files.
+                            <br />
+                            <a href={fileUrl} download className="text-primary hover:underline">
+                              Download file
+                            </a>
+                          </p>
+                        </div>
+                      )
                 ) : (
                   <div className="h-[600px] bg-muted rounded-lg flex items-center justify-center">
                     <FileText className="h-12 w-12 text-muted-foreground" />
